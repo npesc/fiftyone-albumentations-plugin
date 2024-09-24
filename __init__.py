@@ -318,7 +318,7 @@ def _serialize_transform_record(transform_record):
 
 def _augment_group(group):
     """Adds the "_augmented" suffix to the given Group's group name."""
-    return fo.Group(id=group.id, name=group.name + "_augmented")
+    return fo.Group(id=group.id, name=group.name + "_augmented") if group else None
 
 
 def transform_sample(
@@ -326,7 +326,6 @@ def transform_sample(
     transforms,
     label_fields=False,
     new_filepath=None,
-    transform_group=False
     ):
     """Apply an Albumentations transform to the image
     and all label fields listed for the sample.
@@ -405,10 +404,7 @@ def transform_sample(
     transformed_image = transformed["image"]
 
     group = _get_group(sample)
-    if transform_group:
-        augmented_group = _augment_group(group)
-    else:
-        augmented_group = group
+    augmented_group = _augment_group(group)
 
     if has_boxes:
         transformed_boxes = transformed["bboxes"]
@@ -444,12 +440,20 @@ def transform_sample(
             
     cv2.imwrite(new_filepath, transformed_image)
     
-    new_sample = fo.Sample(
-        filepath=new_filepath,
-        tags=['augmented'],
-        transform=transform_record,
-        group=augmented_group
-        )
+
+    if sample._dataset.group_field is not None:
+        new_sample = fo.Sample(
+            filepath=new_filepath,
+            tags=['augmented'],
+            transform=transform_record,
+            group=augmented_group
+            )
+    else:
+        new_sample = fo.Sample(
+            filepath=new_filepath,
+            tags=['augmented'],
+            transform=transform_record
+            )
 
     if has_boxes:
         for detection_field in detection_fields:
@@ -1057,14 +1061,6 @@ class AugmentWithAlbumentations(foo.Operator):
             required=True,
         )
 
-        inputs.bool(
-            "group_name_transform",
-            label="Transform group name",
-            description="The transformation of the group name the sample belongs to.",
-            default=False,
-            required=True,
-        )
-
         _label_fields_input(ctx, inputs)
 
         num_transforms = ctx.params.get("num_transforms", 1)
@@ -1124,7 +1120,6 @@ class AugmentWithAlbumentations(foo.Operator):
                 transforms.extend(new_transforms)
 
         num_augs = ctx.params.get("num_augs", 1)
-        transform_group = ctx.params.get("group_name_transform", False)
 
         label_fields = _get_label_fields_to_transform(ctx)
 
@@ -1138,8 +1133,7 @@ class AugmentWithAlbumentations(foo.Operator):
                 new_sample_id = transform_sample(
                     sample,
                     transforms,
-                    label_fields,
-                    transform_group=transform_group
+                    label_fields
                     )
                 new_sample_ids.append(new_sample_id)
 

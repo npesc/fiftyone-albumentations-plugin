@@ -99,14 +99,26 @@ def _enforce_mask_size(mask, width, height):
     return mask
 
 
+
+def _clamp_bbox(bbox):
+    """Clamps bounding boxes coordinates to values in [0,1] to store in FiftyOne."""
+    return list(map(lambda x: min(max(x, 0), 1), bbox))
+
 def _convert_bbox_to_albumentations(bbox):
     """Convert a FiftyOne bounding box to an Albumentations bounding box."""
-    return [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]]
+    x_min, y_min, x_max, y_max = _clamp_bbox([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
+
+    # Albumentations does not allow x/y_max = x/y_min
+    if x_max <= x_min:
+        x_max = x_min + 1e-5
+    if y_max <= y_min:
+        y_max = y_min + 1e-5
+    return [x_min, y_min, x_max, y_max]
 
 
 def _convert_bbox_from_albumentations(bbox):
     """Convert an Albumentations bounding box to a FiftyOne bounding box."""
-    return [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
+    return _clamp_bbox([bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]])
 
 
 def _convert_keypoint_to_albumentations(keypoint, frame_size):
